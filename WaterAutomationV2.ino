@@ -4,11 +4,11 @@
 #include <PubSubClient.h>
 #include "SparkFun_BMP581_Arduino_Library.h"
 
-// Use it for peinting messages
-#define DEBUG
+// Use it for printing messages
+//#define DEBUG
 
 // If we use the water pressure sensor to monitor pressure and leaks
-#define HAS_PRESSURE
+//#define HAS_PRESSURE
 
 // Control valve if a leak is detected
 //#define HAS_LEAK_CONTROL
@@ -23,70 +23,69 @@
    #define debugln(x)
 #endif
 
-// 388 bytes for calibration, 1 byte for C(alibration), 1 byte checksum, 2 bytes start/end message marker
-#define CALIB_DATA_LEN		388
-#define RX_BUFFER_LEN			CALIB_DATA_LEN + 4
-#define START_MARKER			60 // < Start marker for serial
-#define END_MARKER				62 // > End marker for serial
-#define CMD_CALIBRATE			67 // Send C to start calibration
-#define CMD_STORE_CAL			83 // Send S to store calibration data we send
-
-#define RESPONSE_LENGTH		76 // Get L to inform about length data
-#define RESPONSE_CAL_DONE	CMD_CALIBRATE // Get C to inform about calibration data
-#define RESPONSE_FAIL			70 // Get F to indicate something went wrong
-#define RESPONSE_OK				CMD_STORE_CAL // Get S to indicate something went OK
-
-// Max. no. of devices
-#define DEV_MAX           10
-// Where in EEPROM we start to store calibration data
-#define CAL_START         DEV_MAX + 1
-// Where in EEPROM we stop to store calibration data
-#define CAL_END           CAL_START + CALIB_DATA_LEN
-// First calibration byte is in rxBuffer[2], first EEPROM address is 11 CAL_START
-#define CAL_OFFSET        CAL_START - 2
-
-// We have 4 sensors
+// We have 3 or 4 sensors?
 #ifdef HAS_PRESSURE
-  #define SENSORS_NO        4
+  constexpr uint8_t SENSORS_NO      = 4;
 #else
-  #define SENSORS_NO        3
+  constexpr uint8_t SENSORS_NO      = 3;
 #endif
+
+// 388 bytes for calibration, 1 byte for C(alibration), 1 byte checksum, 2 bytes start/end message marker
+// 388 bytes for calibration, 1 byte for C(alibration), 1 byte checksum, 2 bytes start/end message marker
+constexpr uint16_t CALIB_DATA_LEN   = 388;
+// Buffer length Tx and Rx
+constexpr uint16_t BUFFER_LEN	= CALIB_DATA_LEN + 4;
+// Max. no. of devices
+constexpr uint8_t DEV_MAX           = 10;
+// Where in EEPROM we start to store calibration data
+constexpr uint8_t CAL_START         = DEV_MAX + 1; // Pos 11
+// Where in EEPROM we stop to store calibration data
+constexpr uint16_t CAL_END          = CAL_START + CALIB_DATA_LEN; // Pos 38
+
+// Used in serial communication with VL sensor
+constexpr uint8_t START_MARKER		  = 60; // < Start marker for serial
+constexpr uint8_t END_MARKER			  = 62; // > End marker for serial
+constexpr uint8_t CMD_CALIBRATE		  =	67; // Send C to start calibration
+constexpr uint8_t CMD_STORE_CAL		  =	83; // Send S to store calibration data we send
+
+constexpr uint8_t RESPONSE_LENGTH	  = 76; // Get L to inform about length data
+constexpr uint8_t RESPONSE_CAL_DONE	= 67; // Get C to inform about calibration data
+constexpr uint8_t RESPONSE_FAIL		  = 70; // Get F to indicate something went wrong
+constexpr uint8_t RESPONSE_OK			  = 83; // CMD_STORE_CAL // Get S to indicate something went OK
 
 #ifdef HAS_PRESSURE
 // 4.5v 4,7k 1.47k 1.072V
   //constexpr float ADC_FACTOR      0.000805664062f
-  constexpr float VOLT_TO_BAR_F1 = 0.008308813477f; // This is 10.313f * ADC_FACTOR
-  constexpr float VOLT_TO_BAR_F2 = 1.25f;
-  constexpr uint8_t PRESS_PIN = 2; // Analog read Pressure
+  constexpr float VOLT_TO_BAR_F1    = 0.008308813477f; // This is 10.313f * ADC_FACTOR
+  constexpr float VOLT_TO_BAR_F2    = 1.25f;
+  constexpr uint8_t PRESS_PIN       = 2; // Analog read Pressure
+  // R1 = 9.95, R2=3.264 => 1.112V from 4.5V
+  // P = 0.0024 * ADC
 #endif
 // Pins used
-constexpr uint8_t BTN_PIN   = 1; // Analog read buttons
-constexpr uint8_t LED_PIN   = 4;
-constexpr uint8_t LEVEL_PIN = 7;
-constexpr uint8_t CTRL_PIN2 = 15;
+constexpr uint8_t BTN_PIN           = 1; // Analog read buttons
+constexpr uint8_t LED_PIN           = 4;
+constexpr uint8_t LEVEL_PIN         = 7;
+constexpr uint8_t CTRL_PIN2         = 15;
 
 // WiFi Connect period in ms
-constexpr uint16_t UART_SPEED = 9600;
+constexpr uint16_t UART_SPEED        = 9600;
 // WiFi Connect period in ms
-constexpr uint16_t WiFi_Period = 1000;
+constexpr uint16_t WiFi_Period       = 1000;
 // Send data to MQTT brocker every 30 seconds
-constexpr uint16_t mqttPeriod = 30; 
+constexpr uint16_t mqttPeriod       = 10; 
 // Min. water level in the well in m
-constexpr float minWellLevel  = 0.5;
+constexpr float minWellLevel        = 0.5;
 // Delay for MQTT functions
-constexpr uint8_t delayMQTT   = 50;
+constexpr uint8_t delayMQTT         = 50;
 // WiFi Connect period
-constexpr uint16_t VL53L4CX_Wait = 6000;
+constexpr uint16_t VL53L4CX_WAIT    = 6000;
 // Debounce time in milliseconds
-constexpr uint8_t DEBOUNCE_DELAY = 100;
+constexpr uint8_t DEBOUNCE_DELAY    = 100;
 
 // ADC Values for buttons 1 to 10
-// Assembly 1
-// constexpr uint16_t BTN_ADC_MIN[] = {133, 296, 450, 591, 719, 838, 949, 1055, 1153, 1244};
-// constexpr uint16_t BTN_ADC_MAX[] = {173, 336, 490, 631, 759, 878, 989, 1095, 1193, 1284};
-// Assembly 2
-constexpr uint16_t BTN_ADC_MIN[] = {133, 294, 444, 582, 709, 828, 935, 1041, 1137, 1226};
-constexpr uint16_t BTN_ADC_MAX[] = {173, 334, 484, 622, 749, 868, 975, 1081, 1177, 1266};
+constexpr uint16_t BTN_ADC_MIN[] = {430, 870, 1280, 1650, 1990, 2315, 2615, 2895, 3155, 3400};
+constexpr uint16_t BTN_ADC_MAX[] = {470, 830, 1320, 1690, 2030, 2355, 2655, 2935, 3195, 3440};
 
 enum Button { None, Btn1, Btn2, Btn3, Btn4, Btn5, Btn6, Btn7, Btn8, Btn9, Btn10 };
 enum DeviceStatus { Off, On };
@@ -148,6 +147,8 @@ uint8_t crtButton = None;
 hw_timer_t * timer = NULL;
 // Calibration Distance
 uint8_t calibrateDistance = 0;
+// Used for timeout
+uint32_t timeCheck;
 #ifdef HAS_LEAK_CONTROL
   // Store the alarm status
   uint8_t alarmLeak = 0;
@@ -177,118 +178,128 @@ void bmp581InterruptHandler() {
   interruptBMP = 1;
 }
 
-// Function to generate checksum and place it in the last position of the array
-void generateChecksum(uint8_t *array, uint16_t length) {
-	uint8_t checkSum = 0;
-	if (length < 3) return; // Ensure there's enough length for start, char, and checksum
-	for (size_t i = 1; i < length - 1; i++) {
-		checkSum += array[i];
-	}
-	array[length - 1] = checkSum; // Store the checksum in the last position
-}
-
-// Function to check if the checksum in the last position matches the calculated checksum
-uint8_t checkChecksum(uint8_t *array, uint16_t length) {
-	if (length < 3) return 0; // Not a valid structure
-	uint8_t checksum = 0;
-	for (size_t i = 1; i < length - 1; i++) {
-		checksum += array[i];
-	}
-	return checksum == array[length - 1]; // Compare calculated checksum with the stored one
-}
-
 void sendToSTM(const uint8_t msgType) {
-  uint8_t txBuffer[RX_BUFFER_LEN];
-  uint16_t txLen = 0;
+  uint16_t txLen = 4;
+  // Determine the message length and fill the buffer based on message type
+  if(msgType == CMD_STORE_CAL) {
+    txLen = BUFFER_LEN;
+  }
+  uint8_t txBuffer[txLen];
   // Initialize the common header for all messages
   txBuffer[0] = START_MARKER;
   txBuffer[1] = msgType;
-  // Determine the message length and fill the buffer based on message type
-  switch (msgType) {
-    case CMD_CALIBRATE:
-      txLen = 4;
-    break;
-    case CMD_STORE_CAL:
-      txLen = RX_BUFFER_LEN;
-      // Process calibration data
-      for (uint16_t cnt = CAL_START, bufIndex = 2; cnt < CAL_END; ++cnt, ++bufIndex) {
-        txBuffer[bufIndex] = EEPROM.read(cnt);
-      }
-    break;
+  uint8_t checkSum = msgType;
+  if(msgType == CMD_STORE_CAL) {
+    for (uint16_t cnt = CAL_START; cnt < CAL_END; cnt++) {
+      uint16_t tmp = cnt - 9;
+      txBuffer[tmp] = EEPROM.read(cnt);
+      checkSum += txBuffer[tmp];
+    }
   }
-  // Generate checksum and set end marker
-  generateChecksum(txBuffer, txLen - 1); // Assuming generateChecksum() leaves space for the end marker
+  // Add checksum and end marker
+  txBuffer[txLen - 2] = checkSum;
   txBuffer[txLen - 1] = END_MARKER;
   // Send the message
   Serial1.write(txBuffer, txLen);
 }
 
 uint8_t ProcessReceivedMessage() {
-  constexpr uint8_t maxMsgLen = RX_BUFFER_LEN; // RX_BUFFER_LEN is defined as the maximum message length
-  uint8_t rxBuffer[maxMsgLen];
-  const uint32_t startTime = millis(); // 6-second timeout
-  // Wait for the start marker
-  while (Serial1.available() > 0) {
-    if (Serial1.peek() == START_MARKER) break; // Found the start of a message
-    Serial1.read(); // Discard byte if it's not the start marker
-  }
-  // Wait for at least the minimum message length to be available
-  while (Serial1.available() < 3) { // Minimum message size (including start marker, msgType, and end marker)
-    if ((millis() - startTime) < VL53L4CX_Wait) return 0; // Exit on timeout
-  }
-  // Read the start marker and message type
-  rxBuffer[0] = Serial1.read(); // Start marker
-  rxBuffer[1] = Serial1.read(); // Message type
-  // Determine message length based on type
-  uint8_t expectedLen = 0;
-  switch (rxBuffer[1]) {
-    case RESPONSE_OK:
-    case RESPONSE_FAIL:
-      expectedLen = 4;
-    break;
-    case RESPONSE_LENGTH:
-      expectedLen = 6;
-    break;
-    case RESPONSE_CAL_DONE:
-      expectedLen = RX_BUFFER_LEN;
-    break;
-  }
-  // Wait for the rest of the message
-  while (Serial1.available() < expectedLen - 2) {
-    if ((millis() - startTime) < VL53L4CX_Wait) return 0; // Exit on timeout
-  }
-  // Read the rest of the message
-  for (uint8_t i = 2; i < expectedLen; i++) {
-    rxBuffer[i] = Serial1.read();
-  }
-  // Process the message based on its type
-  if (checkChecksum(rxBuffer, expectedLen)) { // Assuming checkChecksum validates the checksum correctly
-    switch (rxBuffer[1]) {
-      case RESPONSE_OK:
-        return RESPONSE_OK;
+  digitalWrite(LED_PIN, LOW);
+  uint8_t retunValue = 0;
+  // If we have 4 bytes in the buffer and the first one is <
+  if((Serial1.available() > 3) && (Serial1.read() == START_MARKER)) {
+    // Get the message type
+    uint8_t msgType = Serial1.read();
+    // Keep in mind that we already read 2 bytes
+    // Depending on message type we need to wait for some more bytes
+    uint16_t expectedMsgLen = 0; 
+    // expectedMsgLen in below switch is ignoring the last 2 bytes we receive
+    switch(msgType) {
+      case RESPONSE_LENGTH: // We get 6 bytes in total
+        expectedMsgLen = 2;
       break;
-      case RESPONSE_FAIL:
-        // Handle failure response
-        return RESPONSE_FAIL;
+      case RESPONSE_CAL_DONE: // We get 392 bytes in total
+        expectedMsgLen = CALIB_DATA_LEN;
       break;
-      case RESPONSE_LENGTH:
-        // Process length data
-        mySensors[Level].val = (float)*(uint16_t*)&rxBuffer[2];
-        return RESPONSE_LENGTH;
-      break;
-      case RESPONSE_CAL_DONE:
-        // Process calibration data. From 0 to DEV_MAX we have the device data
-        for(uint16_t cnt = CAL_START; cnt < CAL_END; cnt++) {
-          EEPROM.write(cnt, rxBuffer[cnt - CAL_OFFSET]);
-        }
-        EEPROM.commit();
-        delay(delayMQTT);
-        return RESPONSE_CAL_DONE;
+      default: // RESPONSE_OK, RESPONSE_FAIL // We get 4 bytes in total
+        expectedMsgLen = 0;
       break;
     }
+
+    uint8_t receivedCheckSum = 0;
+    // If we get a 4 byte message < M M >
+    // The third byte we read is the checkSum
+    if(!expectedMsgLen) {
+      receivedCheckSum = Serial1.read();
+      if(receivedCheckSum == msgType) {
+        retunValue = msgType;
+      }
+    } else {
+      // Wait to receive all bytes or return timeout
+      timeCheck = millis();
+      while(Serial1.available() < expectedMsgLen) {
+        // If we have a timeout, exit the function
+        if((millis() - timeCheck) > VL53L4CX_WAIT) {
+          // Reuse timeCheck 
+          timeCheck = 0;
+          break;
+        }
+      }
+      // If we do not have a timeout
+      if(timeCheck) {
+        // Buffer to hold received values, START_MARKER not included
+        uint8_t rxBuffer[expectedMsgLen];
+        // Add message type as it is needed in check sum calculation
+        uint8_t checksum = msgType;
+        // Add all bytes in the buffer and calculate check sum in the same loop
+        for (uint16_t i = 0; i < expectedMsgLen; i++) {
+          rxBuffer[i] = Serial1.read();
+          // Calculate the check sum
+          checksum += rxBuffer[i];
+          // Serial.print(i); Serial.print(">>>"); Serial.println(rxBuffer[i]);
+        }
+        // By now we have received the last 2 bytes
+        receivedCheckSum = Serial1.read();
+        // Do not check for > end marker as we test the check sum 
+        // Check message validity
+        if (checksum == receivedCheckSum) {
+          // What type of message we have?
+          switch (msgType) {
+            case RESPONSE_OK:
+              retunValue = RESPONSE_OK;
+            break;
+            case RESPONSE_FAIL:
+              // Handle failure response
+              retunValue = RESPONSE_FAIL;
+            break;
+            case RESPONSE_LENGTH:
+              // Process length data
+              {
+              mySensors[Level].val = (float)*(uint16_t*)&rxBuffer[0];
+              retunValue = RESPONSE_LENGTH;
+              }
+            break;
+            case RESPONSE_CAL_DONE:
+            {
+              // Process calibration data. From 0 to DEV_MAX we have the device data
+              for(uint16_t cnt = CAL_START; cnt < CAL_END; cnt++) {
+                EEPROM.write(cnt, rxBuffer[cnt - CAL_START]);
+                // Serial.print(cnt);Serial.print("---");Serial.print(cnt - CAL_START);
+                // Serial.print("---");Serial.println(rxBuffer[cnt - CAL_START]); 
+              }
+              // No need to wait after commit
+              EEPROM.commit();
+              retunValue = RESPONSE_CAL_DONE;
+            }
+            break;
+          } // End switch
+        } // End CheckSum check
+      } // End timeout check
+    } // End longer message check
   }
-  // Optionally, handle cases where checksum fails
-  return 0;
+  digitalWrite(LED_PIN, HIGH);
+  Serial1.flush();
+  return retunValue;
 }
 
 // Signal errors error
@@ -307,9 +318,9 @@ void ledSignal(uint8_t err) {
       blinkCnt = 2;
   }
   for(uint8_t c = 0; c < blinkCnt; c++){
-    digitalWrite(LEVEL_PIN, HIGH);
+    digitalWrite(LED_PIN, HIGH);
     delay(stateDelay);
-    digitalWrite(LEVEL_PIN, LOW);
+    digitalWrite(LED_PIN, LOW);
     delay(stateDelay);
   }
 }
@@ -326,8 +337,7 @@ void writeDefaultEEPROM() {
 void setup() {
   constexpr uint8_t TX1_PIN = 17;
   constexpr uint8_t RX1_PIN = 18;
-  // adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
-  // adc1_config_channel_atten(ADC1_CHANNEL_1, ADC_ATTEN_DB_11);
+  analogSetAttenuation(ADC_2_5db);
   analogReadResolution(12);
   Serial1.begin(UART_SPEED, SERIAL_8N1, RX1_PIN, TX1_PIN);
   #ifdef DEBUG
@@ -347,15 +357,16 @@ void setup() {
   initObjects();
   // Load number of devices from EEPROM
   DEV_IN_USE = EEPROM.read(DEV_MAX);
-  
-  // Wait for STM board to wakeUp
-  while(ProcessReceivedMessage() != RESPONSE_OK) {
-    delay(10);
+  Serial1.flush();
+  // Wait for STM board to wakeUp. Getting here takes 115ms
+  while((millis() - timeCheck) < VL53L4CX_WAIT) {
+    if(ProcessReceivedMessage()) break;
+    delay(5);
   }
   // Now send the calibration data
   sendToSTM(CMD_STORE_CAL);
 
-  // Setup BMP581 temperature and pressure sensor
+  // // Setup BMP581 temperature and pressure sensor
   bmpInit();
   // Setup and connect to WiFi
   startWiFi();
@@ -368,7 +379,6 @@ void setup() {
   if (!mqtt_Client.connected()) {
     mqtt_reconnect();
   }
-
   // Timer initialization
   // Set timer frequency to 1Mhz (default timer frequency is 80MHz)
   timer = timerBegin(0, 80, true);
@@ -380,11 +390,17 @@ void setup() {
   timerAlarmEnable(timer);
   ledSignal(0);
   crtButton = None;
-
 }
 
 void loop() {
+  // // Used to check ADC values
+  // if (mqttTime >= mqttPeriod) {
+  //   uint16_t adc_val = analogRead(BTN_PIN);
+  //   debugln(adc_val);
+  //   mqttTime = 0;
+  // }
   yield();
+  ProcessReceivedMessage();
   mqtt_Client.loop();
   // Is any button pressed?
   getButtons();
@@ -414,14 +430,15 @@ void loop() {
   }
   // Read temperature, pressure and water level
   if (mqttTime >= mqttPeriod) {
-    //digitalWrite(LEVEL_PIN, HIGH);
-    //delay(WiFi_Period);
     #ifdef HAS_PRESSURE
+      // Get data from Analog pressure sensor
       getWaterPressure();
     #endif
+    // Get data from onboard BMP581
     getTempPress();
+    // Check if we have new data from VL53L4CX
     ProcessReceivedMessage();
-    //digitalWrite(LEVEL_PIN, LOW);
+    // Publish the topics
     publishSensors();
     // If water level is too low turn Off all devices, set the time to 0 and publish MQTT
     if (mySensors[Level].val <= minWellLevel) {
@@ -435,6 +452,8 @@ void loop() {
   if(calibrateDistance) {
     // Send request to STM board
     sendToSTM(CMD_CALIBRATE);
+    // Wait for reply
+    delay(VL53L4CX_WAIT);
     // If calibration is OK
     if(ProcessReceivedMessage() == RESPONSE_CAL_DONE){
       publishToMqtt(topic_CalDist, "1");
@@ -446,49 +465,50 @@ void loop() {
 }
 
 #ifdef HAS_PRESSURE
-// Voltage divider 10k/3.2k
-// V_In max = 4.5V, V_Div = 1.09V
-// P = 0 Bar V = 0.121V
-// P = 5 Bar V = 0.606V
-// P = 10 Bar V = 1.09
-// P = 10.313*V - 1.25
-void getWaterPressure() {
-  // Transform ADC reading in volts
-  //float voltage = (float)adc1_get_raw(ADC1_CHANNEL_1) * ADC_FACTOR;
-  // Transform voltage in Bar
-  mySensors[WaterPress].val = (float)analogRead(PRESS_PIN) * VOLT_TO_BAR_F1 + VOLT_TO_BAR_F2;
-  #ifdef HAS_LEAK_CONTROL
-    if((mySensors[WaterPress].val - prevPressureVal) > pressureThreshold) {
-      digitalWrite(LEVEL_PIN, HIGH);
-      alarmLeak = 1;
-      myBackUp[0] = myDevices[0];
-      myBackUp[1] = myDevices[1];
-      // Cut off water supply. Valve 0 NC and 1 NO    
-      myDevices[0].pinState = 0;
-      publishToMqtt(myDevices[0].topicState, String(myDevices[0].pinState));
-      digitalWrite(myDevices[0].pin, myDevices[0].pinState);
-      myDevices[1].pinState = 1;
-      publishToMqtt(myDevices[1].topicState, String(myDevices[1].pinState));
-      digitalWrite(myDevices[1].pin, myDevices[1].pinState);
-      publishToMqtt(topic_LeakAlarm, "1");
-    } else {
-      // If the alarm is no longer valid
-      if(alarmLeak) {
-        digitalWrite(LEVEL_PIN, LOW);
-        alarmLeak = 0;
-        myDevices[0] = myBackUp[0];
+  // Voltage divider 10k/3.2k
+  // V_In max = 4.5V, V_Div = 1.09V
+  // P = 0 Bar V = 0.121V
+  // P = 5 Bar V = 0.606V
+  // P = 10 Bar V = 1.09
+  // P = 10.313*V - 1.25
+  void getWaterPressure() {
+    // Transform ADC reading in volts
+    //float voltage = (float)adc1_get_raw(ADC1_CHANNEL_1) * ADC_FACTOR;
+    // Transform voltage in Bar
+    mySensors[WaterPress].val = (float)analogRead(PRESS_PIN) * VOLT_TO_BAR_F1 + VOLT_TO_BAR_F2;
+    #ifdef HAS_LEAK_CONTROL
+      if((mySensors[WaterPress].val - prevPressureVal) > pressureThreshold) {
+        digitalWrite(LEVEL_PIN, HIGH);
+        alarmLeak = 1;
+        myBackUp[0] = myDevices[0];
+        myBackUp[1] = myDevices[1];
+        // Cut off water supply. Valve 0 NC and 1 NO    
+        myDevices[0].pinState = 0;
         publishToMqtt(myDevices[0].topicState, String(myDevices[0].pinState));
         digitalWrite(myDevices[0].pin, myDevices[0].pinState);
-        myDevices[1] = myBackUp[1];
+        myDevices[1].pinState = 1;
         publishToMqtt(myDevices[1].topicState, String(myDevices[1].pinState));
         digitalWrite(myDevices[1].pin, myDevices[1].pinState);
-        publishToMqtt(topic_LeakAlarm, "0");
+        publishToMqtt(topic_LeakAlarm, "1");
+      } else {
+        // If the alarm is no longer valid
+        if(alarmLeak) {
+          digitalWrite(LEVEL_PIN, LOW);
+          alarmLeak = 0;
+          myDevices[0] = myBackUp[0];
+          publishToMqtt(myDevices[0].topicState, String(myDevices[0].pinState));
+          digitalWrite(myDevices[0].pin, myDevices[0].pinState);
+          myDevices[1] = myBackUp[1];
+          publishToMqtt(myDevices[1].topicState, String(myDevices[1].pinState));
+          digitalWrite(myDevices[1].pin, myDevices[1].pinState);
+          publishToMqtt(topic_LeakAlarm, "0");
+        }
       }
-    }
-    prevPressureVal = mySensors[WaterPress].val;
-  #endif
-}
+      prevPressureVal = mySensors[WaterPress].val;
+    #endif
+  }
 #endif
+
 // Function to debounce the button
 void getButtons() {
   uint16_t adc_val = analogRead(BTN_PIN);
@@ -556,6 +576,7 @@ void publishTopics() {
     mqtt_Client.subscribe(topic_LeakValue);
     delay(delayMQTT);
   #endif
+
   // Publish/subscribe the calibration Distance, should be 0
   publishToMqtt(topic_CalDist, String(calibrateDistance));
   delay(delayMQTT);
@@ -649,9 +670,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 // Wi-Fi connection SetUp - Wasted a day with connection issues because of buggy library
 void startWiFi() {
   // WiFi network name
-  constexpr char *ssid = "WIFI_SSID";
+  constexpr char *ssid = "WIFI_NETWORK_NAME";
   // WiFi network password
-  constexpr char *password = "WIFI_PASSWORD";
+  constexpr char *password = ""WIFI_NETWORK_PASSWORD";
   WiFi.mode(WIFI_STA);
   WiFi.hostname(clientID);
   // debugln(WiFi.macAddress());
